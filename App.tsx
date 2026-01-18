@@ -11,7 +11,7 @@ import ArchitectureView from './components/ArchitectureView';
 import ExplainabilityView from './components/ExplainabilityView';
 import LatencyChart from './components/LatencyChart';
 import ReviewQueueOverlay from './components/ReviewQueueOverlay';
-import { AlertTriangle, Cpu, LayoutDashboard, ShieldCheck, Activity, Terminal, Gauge, Zap } from 'lucide-react';
+import { AlertTriangle, Cpu, LayoutDashboard, ShieldCheck, Activity, Terminal, Gauge, Zap, Waves, ActivitySquare } from 'lucide-react';
 
 const engine = new FraudEngine();
 
@@ -56,11 +56,11 @@ const App: React.FC = () => {
 
     setLatencyHistory(prev => {
       const next = [...prev, { 
-        time: new Date().toLocaleTimeString(), 
+        time: new Date().toLocaleTimeString([], { hour12: false, minute: '2-digit', second: '2-digit' }), 
         latency: parseFloat(analysis.processingTimeMs.toFixed(2)),
         id: tx.id 
       }];
-      return next.slice(-40);
+      return next.slice(-60); // Sufficient history for tracking
     });
 
     txCounter.current += 1;
@@ -73,7 +73,7 @@ const App: React.FC = () => {
     });
 
     latencyBuffer.current.push(analysis.processingTimeMs);
-    if (latencyBuffer.current.length > 50) latencyBuffer.current.shift();
+    if (latencyBuffer.current.length > 100) latencyBuffer.current.shift();
   }, [strategyIndex]);
 
   const handleManualAction = (id: string, action: Decision) => {
@@ -93,7 +93,7 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const simulator = new StreamSimulator(handleNewTransaction);
-    simulator.start(1500);
+    simulator.start(1000); // 1.0s interval for consistent tracking
 
     const metricsInterval = setInterval(() => {
       const latencies = [...latencyBuffer.current].sort((a, b) => a - b);
@@ -102,13 +102,14 @@ const App: React.FC = () => {
       
       setMetrics(prev => ({
         ...prev,
-        throughput: txCounter.current / 5,
+        throughput: txCounter.current / 2, // normalized to requests/sec over 2s interval
         avgLatency: avgLat,
         p99Latency: p99Lat,
-        fraudRate: stream.length ? stream.filter(s => s.analysis.decision !== Decision.APPROVE).length / stream.length : 0
+        fraudRate: stream.length ? stream.filter(s => s.analysis.decision !== Decision.APPROVE).length / stream.length : 0,
+        modelDrift: 0.012 + (Math.random() * 0.005 - 0.0025) // Simulate minor real-time drift
       }));
       txCounter.current = 0;
-    }, 5000);
+    }, 2000);
 
     return () => {
       simulator.stop();
@@ -120,120 +121,94 @@ const App: React.FC = () => {
   const slaStatus = metrics.p99Latency > SYSTEM_CONFIG.LATENCY_BUDGET_MS ? 'CRITICAL' : metrics.p99Latency > 80 ? 'WARNING' : 'OPTIMAL';
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-slate-950 font-sans">
-      <nav className="w-20 lg:w-64 border-r border-slate-800 flex flex-col items-center lg:items-stretch py-6 px-4 gap-8 bg-slate-900/50">
+    <div className="flex h-screen w-full overflow-hidden bg-slate-950 text-slate-50 font-sans">
+      {/* Sidebar Navigation */}
+      <nav className="w-20 lg:w-64 border-r border-slate-800 flex flex-col py-6 px-4 gap-8 bg-slate-900/50 z-20">
         <div className="flex items-center gap-3 px-2">
-          <div className="p-2 bg-indigo-600 rounded-lg shadow-lg shadow-indigo-500/20">
+          <div className="p-2 bg-indigo-600 rounded-xl shadow-lg shadow-indigo-500/30">
             <ShieldCheck className="w-6 h-6 text-white" />
           </div>
-          <h1 className="hidden lg:block text-xl font-black tracking-tight text-white uppercase italic">Sentinel</h1>
+          <h1 className="hidden lg:block text-2xl font-black tracking-tighter text-white uppercase italic">Sentinel</h1>
         </div>
 
         <div className="flex flex-col gap-2 flex-1">
-          <button onClick={() => setActiveTab('dashboard')} className={`flex items-center gap-3 p-3 rounded-xl transition-all duration-200 ${activeTab === 'dashboard' ? 'bg-indigo-600/10 text-indigo-400' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}>
+          <button onClick={() => setActiveTab('dashboard')} className={`flex items-center gap-3 p-3.5 rounded-2xl transition-all duration-300 ${activeTab === 'dashboard' ? 'bg-indigo-600/15 text-indigo-400 border border-indigo-500/20 shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}>
             <LayoutDashboard className="w-5 h-5" />
-            <span className="hidden lg:block font-bold">Dashboard</span>
+            <span className="hidden lg:block font-black uppercase tracking-tight text-sm">Dashboard</span>
           </button>
-          <button onClick={() => setActiveTab('architecture')} className={`flex items-center gap-3 p-3 rounded-xl transition-all duration-200 ${activeTab === 'architecture' ? 'bg-indigo-600/10 text-indigo-400' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}>
+          <button onClick={() => setActiveTab('architecture')} className={`flex items-center gap-3 p-3.5 rounded-2xl transition-all duration-300 ${activeTab === 'architecture' ? 'bg-indigo-600/15 text-indigo-400 border border-indigo-500/20 shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}>
             <Cpu className="w-5 h-5" />
-            <span className="hidden lg:block font-bold">Architecture</span>
+            <span className="hidden lg:block font-black uppercase tracking-tight text-sm">Architecture</span>
           </button>
         </div>
 
-        <div className="mt-auto hidden lg:block p-4 rounded-2xl bg-slate-800/30 border border-slate-700/50">
-          <div className="flex items-center gap-2 mb-2">
+        <div className="mt-auto hidden lg:block p-5 rounded-2xl bg-slate-800/20 border border-slate-700/50">
+          <div className="flex items-center gap-2 mb-3">
             <Terminal className="w-4 h-4 text-indigo-400" />
-            <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Active Script</span>
+            <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Core Strategy</span>
           </div>
-          <div className="space-y-1">
-            <p className="text-xs font-bold text-indigo-400">{STRATEGIES[strategyIndex].name}</p>
-            <p className="text-[9px] text-slate-500 leading-tight">{STRATEGIES[strategyIndex].description}</p>
-          </div>
-          <div className="mt-3 h-1 w-full bg-slate-800 rounded-full overflow-hidden">
+          <p className="text-xs font-black text-indigo-400 uppercase mb-1">{STRATEGIES[strategyIndex].name}</p>
+          <div className="h-1.5 w-full bg-slate-950 rounded-full overflow-hidden mb-2">
             <div className="h-full bg-indigo-500 transition-all duration-1000" style={{ width: `${(totalProcessed % 100)}%` }} />
           </div>
-          <p className="mt-1 text-[8px] text-slate-600 font-bold uppercase">Rotation in {100 - (totalProcessed % 100)} TX</p>
+          <p className="text-[8px] text-slate-500 font-bold uppercase">Rotation Cycle: {totalProcessed % 100}/100</p>
         </div>
       </nav>
 
-      <main className="flex-1 flex flex-col min-w-0 bg-slate-950 relative">
+      {/* Main View */}
+      <main className="flex-1 flex flex-col min-w-0 relative z-10">
         <Header metrics={metrics} strategy={STRATEGIES[strategyIndex]} />
         
         <div className="flex-1 overflow-hidden flex flex-col p-6 gap-6">
           {activeTab === 'dashboard' ? (
             <>
+              {/* Row 1: KPI Cards */}
               <MetricsOverview metrics={metrics} />
               
+              {/* Row 2: Main Operational View */}
               <div className="flex-1 min-h-0 flex gap-6">
-                <div className="flex-[3] min-w-0 flex flex-col gap-6">
-                  {/* Transaction Feed */}
-                  <div className="flex-[2] min-h-0 flex flex-col bg-slate-900/50 border border-slate-800 rounded-2xl overflow-hidden backdrop-blur-sm shadow-xl">
-                    <div className="px-6 py-4 border-b border-slate-800 flex justify-between items-center bg-slate-900/80">
-                      <h2 className="font-bold flex items-center gap-2 text-slate-100 tracking-tight">
-                        <AlertTriangle className="w-4 h-4 text-amber-500" />
-                        Live Ingestion Feed
-                      </h2>
-                      <div className="flex items-center gap-3">
-                         {reviewQueue.length > 0 && (
-                           <span className="animate-pulse bg-rose-500/20 text-rose-500 text-[9px] font-black px-2 py-0.5 rounded border border-rose-500/30 uppercase tracking-widest">
-                             {reviewQueue.length} Pending Review
-                           </span>
-                         )}
-                         <span className="text-[10px] text-slate-500 font-mono uppercase tracking-[0.2em] font-black">Streaming</span>
-                      </div>
-                    </div>
-                    <TransactionList 
-                      stream={stream} 
-                      onSelect={setSelectedItem} 
-                      selectedId={selectedItem?.tx.id} 
-                    />
-                  </div>
-
-                  {/* P99 Latency Monitor (Improved) */}
-                  <div className="flex-1 bg-slate-900/50 border border-slate-800 rounded-2xl p-6 flex flex-col backdrop-blur-sm shadow-xl relative overflow-hidden group">
-                    <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
-                      <Gauge className="w-24 h-24 text-indigo-400" />
-                    </div>
-                    
-                    <div className="flex items-start justify-between mb-4">
+                
+                {/* Column A: Monitoring and Feed (Primary Area) */}
+                <div className="flex-[3] flex flex-col gap-6 min-w-0">
+                  
+                  {/* Top: Latency Engine (Now Primary Position) */}
+                  <div className="h-[280px] bg-slate-900/40 border border-slate-800 rounded-3xl p-6 flex flex-col backdrop-blur-xl shadow-2xl relative overflow-hidden group">
+                    <div className="flex items-start justify-between mb-2 relative z-10">
                       <div>
                         <div className="flex items-center gap-2 mb-1">
-                          <Activity className="w-4 h-4 text-indigo-400" />
-                          <h2 className="text-xs font-black text-slate-200 uppercase tracking-widest">P99 Latency Engine</h2>
+                          <ActivitySquare className="w-4 h-4 text-indigo-400" />
+                          <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest">Latency Engine (SLA: 100ms)</h2>
                         </div>
-                        <div className="flex items-center gap-3">
-                          <span className={`text-2xl font-mono font-black ${slaStatus === 'CRITICAL' ? 'text-rose-400' : slaStatus === 'WARNING' ? 'text-amber-400' : 'text-emerald-400'}`}>
-                            {metrics.p99Latency.toFixed(2)}ms
+                        <div className="flex items-baseline gap-2">
+                          <span className={`text-4xl font-mono font-black tracking-tighter ${slaStatus === 'CRITICAL' ? 'text-rose-400' : slaStatus === 'WARNING' ? 'text-amber-400' : 'text-emerald-400'}`}>
+                            {metrics.p99Latency.toFixed(2)}<span className="text-sm font-bold opacity-50 ml-0.5">ms</span>
                           </span>
-                          <span className={`text-[10px] font-black px-2 py-0.5 rounded border ${
-                            slaStatus === 'CRITICAL' ? 'bg-rose-500/10 border-rose-500/20 text-rose-500' :
-                            slaStatus === 'WARNING' ? 'bg-amber-500/10 border-amber-500/20 text-amber-500' :
-                            'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
-                          }`}>
+                          <span className={`text-[10px] font-black px-3 py-1 rounded-full border ${
+                            slaStatus === 'CRITICAL' ? 'bg-rose-500/10 border-rose-500/30 text-rose-500' :
+                            slaStatus === 'WARNING' ? 'bg-amber-500/10 border-amber-500/30 text-amber-500' :
+                            'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                          } uppercase`}>
                             {slaStatus}
                           </span>
                         </div>
                       </div>
 
-                      <div className="w-48">
-                        <div className="flex justify-between text-[10px] font-black uppercase text-slate-500 mb-1">
-                          <span>SLA Budget Used</span>
+                      <div className="w-56 bg-slate-950/40 p-4 rounded-2xl border border-slate-800">
+                        <div className="flex justify-between text-[9px] font-black uppercase text-slate-500 mb-2">
+                          <span>SLA Performance Budget</span>
                           <span className={slaBudgetUsed > 90 ? 'text-rose-400' : 'text-slate-300'}>{slaBudgetUsed.toFixed(1)}%</span>
                         </div>
-                        <div className="h-2 bg-slate-800 rounded-full overflow-hidden border border-slate-700/50">
+                        <div className="h-2.5 bg-slate-900 rounded-full overflow-hidden border border-slate-800">
                           <div 
-                            className={`h-full transition-all duration-500 ease-out ${
-                              slaBudgetUsed > 90 ? 'bg-rose-500' : slaBudgetUsed > 75 ? 'bg-amber-500' : 'bg-emerald-500'
+                            className={`h-full transition-all duration-700 ease-out ${
+                              slaBudgetUsed > 90 ? 'bg-rose-500' : slaBudgetUsed > 75 ? 'bg-amber-500' : 'bg-indigo-500'
                             }`}
                             style={{ width: `${slaBudgetUsed}%` }}
                           />
                         </div>
-                        <div className="flex justify-between mt-1">
-                          <span className="text-[9px] text-slate-600 font-bold">0ms</span>
-                          <div className="flex items-center gap-1">
-                            <Zap className="w-2 h-2 text-rose-500" />
-                            <span className="text-[9px] text-rose-500/70 font-bold">100ms SLA</span>
-                          </div>
+                        <div className="flex justify-between mt-1 text-[8px] text-slate-600 font-bold">
+                          <span>0ms</span>
+                          <span>100ms SLA</span>
                         </div>
                       </div>
                     </div>
@@ -242,9 +217,34 @@ const App: React.FC = () => {
                       <LatencyChart data={latencyHistory} onSelect={handleChartSelection} />
                     </div>
                   </div>
+
+                  {/* Bottom: Transaction Stream */}
+                  <div className="flex-1 min-h-0 bg-slate-900/40 border border-slate-800 rounded-3xl flex flex-col overflow-hidden backdrop-blur-xl shadow-2xl">
+                    <div className="px-6 py-4 border-b border-slate-800 flex justify-between items-center bg-slate-900/60">
+                      <div className="flex items-center gap-3">
+                        <Waves className="w-4 h-4 text-amber-500 animate-pulse" />
+                        <h2 className="font-black text-slate-200 uppercase text-xs tracking-widest">Real-time Data Plane</h2>
+                      </div>
+                      <div className="flex items-center gap-3">
+                         {reviewQueue.length > 0 && (
+                           <span className="bg-rose-500/10 text-rose-500 text-[9px] font-black px-2 py-0.5 rounded border border-rose-500/20 uppercase">
+                             {reviewQueue.length} In Review
+                           </span>
+                         )}
+                         <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></div>
+                         <span className="text-[10px] text-slate-500 font-mono font-black uppercase tracking-widest">Stream Active</span>
+                      </div>
+                    </div>
+                    <TransactionList 
+                      stream={stream} 
+                      onSelect={setSelectedItem} 
+                      selectedId={selectedItem?.tx.id} 
+                    />
+                  </div>
                 </div>
 
-                <div className="flex-[2] min-w-0 flex flex-col gap-6 relative">
+                {/* Column B: Analysis Side-panel */}
+                <div className="flex-[2] min-w-0 relative">
                   <ExplainabilityView selectedItem={selectedItem} metrics={metrics} />
                   {selectedItem?.analysis.decision === Decision.MANUAL_REVIEW && (
                     <ReviewQueueOverlay 
