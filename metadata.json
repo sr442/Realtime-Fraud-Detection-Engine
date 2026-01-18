@@ -1,0 +1,5 @@
+{
+  "name": "Copy of Sentinel - Real-Time Fraud Detection System",
+  "description": "A production-grade, low-latency fraud detection engine with ML + rule-based scoring, live SLA monitoring, and AI-driven explainability.",
+  "requestFramePermissions": []
+}
