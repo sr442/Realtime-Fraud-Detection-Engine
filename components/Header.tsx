@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { SystemMetrics, Strategy } from '../types';
-import { Activity, Zap, RefreshCw, Layers } from 'lucide-react';
+import { Activity, Zap, RefreshCw, Layers, Globe } from 'lucide-react';
 
 interface HeaderProps {
   metrics: SystemMetrics;
@@ -16,9 +16,16 @@ const Header: React.FC<HeaderProps> = ({ metrics, strategy }) => {
           <Activity className="w-4 h-4 text-emerald-500" />
           <span className="text-sm font-medium text-slate-200">System Status: <span className="text-emerald-500">Nominal</span></span>
         </div>
-        <div className="hidden md:flex items-center gap-2">
-          <Layers className="w-4 h-4 text-indigo-400" />
-          <span className="text-xs font-bold text-slate-400">Core: {strategy?.name || 'Loading...'}</span>
+        <div className="hidden md:flex items-center gap-4">
+          <div className="w-px h-4 bg-slate-800"></div>
+          <div className="flex items-center gap-2">
+            <Globe className="w-3.5 h-3.5 text-indigo-400" />
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Edge: LHR-GLOBAL-1</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Layers className="w-3.5 h-3.5 text-indigo-400" />
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Core: {strategy?.name || 'Loading...'}</span>
+          </div>
         </div>
       </div>
 
@@ -26,11 +33,11 @@ const Header: React.FC<HeaderProps> = ({ metrics, strategy }) => {
         <div className="flex flex-col items-end">
           <div className="flex items-center gap-2">
              <RefreshCw className="w-3 h-3 text-indigo-400 animate-spin" />
-             <span className="text-xs font-mono text-slate-400">SYNC: NODE-US-EAST-1</span>
+             <span className="text-xs font-mono text-slate-400 uppercase">CDN SYNC: ACTIVE</span>
           </div>
-          <span className="text-[10px] text-slate-600 font-bold uppercase tracking-widest">Sentinel v4.2.0</span>
+          <span className="text-[10px] text-slate-600 font-black uppercase tracking-[0.2em]">Sentinel v4.2.0-PROD</span>
         </div>
-        <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-xs font-bold text-indigo-400">
+        <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-xs font-bold text-indigo-400 shadow-inner">
           SR
         </div>
       </div>
