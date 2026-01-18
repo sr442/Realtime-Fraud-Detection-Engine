@@ -12,7 +12,7 @@ import ExplainabilityView from './components/ExplainabilityView';
 import LatencyChart from './components/LatencyChart';
 import ReviewQueueOverlay from './components/ReviewQueueOverlay';
 import LogsView from './components/LogsView';
-import { Cpu, LayoutDashboard, ShieldCheck, Activity, Terminal, Waves, ActivitySquare, ScrollText } from 'lucide-react';
+import { Cpu, LayoutDashboard, ShieldCheck, Activity, Terminal, Waves, ActivitySquare, ScrollText, UserCheck } from 'lucide-react';
 
 const engine = new FraudEngine();
 
@@ -24,7 +24,7 @@ const STRATEGIES: Strategy[] = [
 ];
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'architecture' | 'logs'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'architecture' | 'logs' | 'review'>('dashboard');
   const [stream, setStream] = useState<{tx: Transaction, analysis: RiskAnalysis}[]>([]);
   const [latencyHistory, setLatencyHistory] = useState<{time: string, latency: number, id: string}[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -59,8 +59,6 @@ const App: React.FC = () => {
 
   const handleNewTransaction = useCallback(async (tx: Transaction) => {
     const currentStrategy = STRATEGIES[strategyIndex];
-    addLog(`Ingesting event from user_${tx.userId.substring(5)}: ${tx.amount} ${tx.currency} via ${tx.device.os}`, LogSeverity.INFO, 'INGESTION');
-    
     const analysis = await engine.analyze(tx, currentStrategy);
     
     if (analysis.isFallback) {
@@ -68,12 +66,12 @@ const App: React.FC = () => {
     }
 
     if (analysis.decision === Decision.BLOCK) {
-      addLog(`HIGH RISK DETECTED. Transaction blocked automatically (Score: ${analysis.score}).`, LogSeverity.WARN, 'DECISION');
+      addLog(`BLOCK: High risk detected on ${tx.id} (Score: ${analysis.score}).`, LogSeverity.WARN, 'DECISION');
     } else if (analysis.decision === Decision.MANUAL_REVIEW) {
-      addLog(`HELD FOR REVIEW. Logic uncertainty in strategy ${currentStrategy.name}.`, LogSeverity.WARN, 'DECISION');
-      setReviewQueue(prev => [...prev, { tx, analysis }]);
+      addLog(`HELD: Trace ${tx.id} requires human intelligence override.`, LogSeverity.WARN, 'DECISION');
+      setReviewQueue(prev => [{ tx, analysis }, ...prev]);
     } else {
-      addLog(`Decision approved for ${tx.id} in ${analysis.processingTimeMs.toFixed(2)}ms.`, LogSeverity.INFO, 'DECISION');
+      addLog(`APPROVED: ${tx.id} processed in ${analysis.processingTimeMs.toFixed(2)}ms.`, LogSeverity.INFO, 'DECISION');
     }
 
     setStream(prev => {
@@ -95,7 +93,6 @@ const App: React.FC = () => {
       const next = prev + 1;
       if (next % 100 === 0) {
         setStrategyIndex(idx => (idx + 1) % STRATEGIES.length);
-        addLog(`Hot-swapping logic strategy to ${STRATEGIES[(strategyIndex + 1) % STRATEGIES.length].name}`, LogSeverity.INFO, 'MAINTENANCE');
       }
       return next;
     });
@@ -105,24 +102,30 @@ const App: React.FC = () => {
   }, [strategyIndex, addLog]);
 
   const handleManualAction = (id: string, action: Decision) => {
-    addLog(`Manual intervention completed for ${id}. Action: ${action}`, LogSeverity.INFO, 'HUMAN_OVERRIDE');
+    addLog(`OVERRIDE: Analyst set ${id} to ${action}`, LogSeverity.INFO, 'HUMAN_OVERRIDE');
+    
+    // Clear from review queue
     setReviewQueue(prev => prev.filter(item => item.tx.id !== id));
+    
+    // Update master stream
     setStream(prev => prev.map(item => 
       item.tx.id === id ? { ...item, analysis: { ...item.analysis, decision: action } } : item
     ));
+
+    // Update selection to show result
     if (selectedItem?.tx.id === id) {
       setSelectedItem(prev => prev ? { ...prev, analysis: { ...prev.analysis, decision: action } } : null);
     }
   };
 
   const handleChartSelection = (id: string) => {
-    const item = stream.find(s => s.tx.id === id);
+    const item = stream.find(s => s.tx.id === id) || reviewQueue.find(s => s.tx.id === id);
     if (item) setSelectedItem(item);
   };
 
   useEffect(() => {
     const simulator = new StreamSimulator(handleNewTransaction);
-    simulator.start(1500); 
+    simulator.start(2000); // Slower for easier tracking during demo
 
     const metricsInterval = setInterval(() => {
       const latencies = [...latencyBuffer.current].sort((a, b) => a - b);
@@ -165,10 +168,22 @@ const App: React.FC = () => {
             <LayoutDashboard className="w-5 h-5" />
             <span className="hidden lg:block font-black uppercase tracking-tight text-sm">Dashboard</span>
           </button>
+          
+          <button onClick={() => setActiveTab('review')} className={`relative flex items-center gap-3 p-3.5 rounded-2xl transition-all duration-300 ${activeTab === 'review' ? 'bg-amber-600/15 text-amber-400 border border-amber-500/20 shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}>
+            <UserCheck className="w-5 h-5" />
+            <span className="hidden lg:block font-black uppercase tracking-tight text-sm">Review Center</span>
+            {reviewQueue.length > 0 && (
+              <span className="absolute top-2 right-2 lg:right-4 w-5 h-5 bg-amber-500 text-slate-950 text-[10px] font-black rounded-full flex items-center justify-center animate-pulse border-2 border-slate-950">
+                {reviewQueue.length}
+              </span>
+            )}
+          </button>
+
           <button onClick={() => setActiveTab('logs')} className={`flex items-center gap-3 p-3.5 rounded-2xl transition-all duration-300 ${activeTab === 'logs' ? 'bg-indigo-600/15 text-indigo-400 border border-indigo-500/20 shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}>
             <ScrollText className="w-5 h-5" />
             <span className="hidden lg:block font-black uppercase tracking-tight text-sm">Observability</span>
           </button>
+          
           <button onClick={() => setActiveTab('architecture')} className={`flex items-center gap-3 p-3.5 rounded-2xl transition-all duration-300 ${activeTab === 'architecture' ? 'bg-indigo-600/15 text-indigo-400 border border-indigo-500/20 shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}>
             <Cpu className="w-5 h-5" />
             <span className="hidden lg:block font-black uppercase tracking-tight text-sm">Architecture</span>
@@ -176,29 +191,19 @@ const App: React.FC = () => {
         </div>
 
         <div className="mt-auto hidden lg:block p-5 rounded-2xl bg-slate-800/20 border border-slate-700/50">
-          <div className="flex items-center gap-2 mb-3">
-            <Terminal className="w-4 h-4 text-indigo-400" />
-            <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Logic Core</span>
-          </div>
-          <p className="text-xs font-black text-indigo-400 uppercase truncate mb-1">{STRATEGIES[strategyIndex].name}</p>
-          <div className="h-1.5 w-full bg-slate-950 rounded-full overflow-hidden mb-2">
-            <div className="h-full bg-indigo-500 transition-all duration-1000" style={{ width: `${(totalProcessed % 100)}%` }} />
-          </div>
-          <p className="text-[8px] text-slate-500 font-bold uppercase tracking-widest">Rotation Cycle: {totalProcessed % 100}/100</p>
+          <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-2">Active Strategy</p>
+          <p className="text-xs font-black text-indigo-400 uppercase truncate">{STRATEGIES[strategyIndex].name}</p>
         </div>
       </nav>
 
-      {/* Main Container */}
       <main className="flex-1 flex flex-col min-w-0 relative z-10 overflow-hidden">
         <Header metrics={metrics} strategy={STRATEGIES[strategyIndex]} />
         
         <div className="flex-1 overflow-y-auto p-6 space-y-6 scroll-smooth">
           {activeTab === 'dashboard' ? (
             <>
-              {/* Row 1: KPI Cards */}
               <MetricsOverview metrics={metrics} />
               
-              {/* Row 2: SLA Engine HERO */}
               <div className="h-[340px] bg-slate-900/40 border border-slate-800 rounded-3xl p-6 flex flex-col backdrop-blur-xl shadow-2xl relative overflow-hidden group border-t-2 border-t-indigo-500/20">
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-indigo-500/20 to-transparent"></div>
                 <div className="flex items-start justify-between mb-4 relative z-10">
@@ -211,38 +216,13 @@ const App: React.FC = () => {
                       <span className={`text-5xl font-mono font-black tracking-tighter ${slaStatus === 'CRITICAL' ? 'text-rose-400' : slaStatus === 'WARNING' ? 'text-amber-400' : 'text-emerald-400'}`}>
                         {metrics.p99Latency.toFixed(2)}<span className="text-base font-bold opacity-40 ml-1">ms</span>
                       </span>
-                      <div className="flex flex-col">
-                        <span className={`text-[10px] font-black px-3 py-1 rounded-full border self-start ${
-                          slaStatus === 'CRITICAL' ? 'bg-rose-500/10 border-rose-500/30 text-rose-500' :
-                          slaStatus === 'WARNING' ? 'bg-amber-500/10 border-amber-500/30 text-amber-500' :
-                          'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-                        } uppercase mb-1`}>
-                          P99 Status: {slaStatus}
-                        </span>
-                        <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">Goal: &lt;100.00ms</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="w-72 bg-slate-950/40 p-5 rounded-2xl border border-slate-800 shadow-inner">
-                    <div className="flex justify-between text-[10px] font-black uppercase text-slate-500 mb-2 tracking-widest">
-                      <span>Performance Budget</span>
-                      <span className={`${slaBudgetUsed > 90 ? 'text-rose-400' : 'text-slate-300'} font-mono`}>{slaBudgetUsed.toFixed(1)}%</span>
-                    </div>
-                    <div className="h-3 bg-slate-900 rounded-full overflow-hidden border border-slate-800 shadow-inner">
-                      <div 
-                        className={`h-full transition-all duration-700 ease-out ${
-                          slaBudgetUsed > 90 ? 'bg-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.5)]' : slaBudgetUsed > 75 ? 'bg-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.5)]' : 'bg-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.5)]'
-                        }`}
-                        style={{ width: `${slaBudgetUsed}%` }}
-                      />
-                    </div>
-                    <div className="flex justify-between mt-2 text-[9px] text-slate-600 font-black uppercase">
-                      <span>0ms</span>
-                      <div className="flex items-center gap-1.5">
-                        <div className={`w-1.5 h-1.5 rounded-full ${slaStatus === 'CRITICAL' ? 'bg-rose-500' : 'bg-slate-700'}`}></div>
-                        <span>100ms Threshold</span>
-                      </div>
+                      <span className={`text-[10px] font-black px-3 py-1 rounded-full border ${
+                        slaStatus === 'CRITICAL' ? 'bg-rose-500/10 border-rose-500/30 text-rose-500' :
+                        slaStatus === 'WARNING' ? 'bg-amber-500/10 border-amber-500/30 text-amber-500' :
+                        'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                      } uppercase`}>
+                        {slaStatus}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -252,41 +232,46 @@ const App: React.FC = () => {
                 </div>
               </div>
 
-              {/* Row 3: Operational Layer */}
               <div className="flex gap-6 min-h-[500px]">
-                {/* Column A: Ingestion Feed */}
                 <div className="flex-1 bg-slate-900/40 border border-slate-800 rounded-3xl flex flex-col overflow-hidden backdrop-blur-xl shadow-2xl">
                   <div className="px-6 py-4 border-b border-slate-800 flex justify-between items-center bg-slate-900/60">
                     <div className="flex items-center gap-3">
                       <Waves className="w-4 h-4 text-amber-500 animate-pulse" />
                       <h2 className="font-black text-slate-200 uppercase text-xs tracking-widest italic">Live Data Plane</h2>
                     </div>
-                    <div className="flex items-center gap-3">
-                        <div className="flex items-center gap-2 px-2 py-1 bg-emerald-500/5 border border-emerald-500/20 rounded-md">
-                          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></div>
-                          <span className="text-[9px] text-emerald-400 font-black uppercase tracking-widest">Active</span>
-                        </div>
-                    </div>
                   </div>
-                  <TransactionList 
-                    stream={stream} 
-                    onSelect={setSelectedItem} 
-                    selectedId={selectedItem?.tx.id} 
-                  />
+                  <TransactionList stream={stream} onSelect={setSelectedItem} selectedId={selectedItem?.tx.id} />
                 </div>
 
-                {/* Column B: Intelligence Layer */}
                 <div className="flex-1 relative">
                   <ExplainabilityView selectedItem={selectedItem} metrics={metrics} />
                   {selectedItem?.analysis.decision === Decision.MANUAL_REVIEW && (
-                    <ReviewQueueOverlay 
-                      item={selectedItem} 
-                      onAction={handleManualAction} 
-                    />
+                    <ReviewQueueOverlay item={selectedItem} onAction={handleManualAction} />
                   )}
                 </div>
               </div>
             </>
+          ) : activeTab === 'review' ? (
+            <div className="flex gap-6 h-full">
+              <div className="flex-1 bg-slate-900/40 border border-slate-800 rounded-3xl flex flex-col overflow-hidden shadow-2xl">
+                 <div className="px-6 py-4 border-b border-slate-800 bg-slate-900/60 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <UserCheck className="w-5 h-5 text-amber-400" />
+                      <h2 className="font-black text-slate-100 uppercase tracking-widest text-sm italic">Manual Intervention Queue</h2>
+                    </div>
+                    <span className="text-[10px] font-black text-slate-500 uppercase px-3 py-1 bg-slate-950 rounded border border-slate-800">
+                      {reviewQueue.length} Pending Actions
+                    </span>
+                 </div>
+                 <TransactionList stream={reviewQueue} onSelect={setSelectedItem} selectedId={selectedItem?.tx.id} />
+              </div>
+              <div className="flex-1 relative">
+                <ExplainabilityView selectedItem={selectedItem} metrics={metrics} />
+                {selectedItem?.analysis.decision === Decision.MANUAL_REVIEW && (
+                  <ReviewQueueOverlay item={selectedItem} onAction={handleManualAction} />
+                )}
+              </div>
+            </div>
           ) : activeTab === 'logs' ? (
             <LogsView logs={logs} onClear={() => setLogs([])} />
           ) : (

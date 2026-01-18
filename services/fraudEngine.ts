@@ -39,7 +39,7 @@ export class FraudEngine {
     
     if (speed > SYSTEM_CONFIG.SPEED_OF_LIGHT_KMH && distance > 50) {
       flags.push(RiskFlag.IMPOSSIBLE_TRAVEL);
-      ruleScore += 40;
+      ruleScore += 45;
     }
     if (history.recentTransactionCount > 5) {
       flags.push(RiskFlag.VELOCITY_SPIKE);
@@ -47,16 +47,16 @@ export class FraudEngine {
     }
     if (!history.lastDeviceIds.includes(transaction.device.id)) {
       flags.push(RiskFlag.NEW_DEVICE);
-      ruleScore += 15;
+      ruleScore += 20;
     }
     if (transaction.amount > history.avgTransactionValue * 10) {
       flags.push(RiskFlag.HIGH_VALUE);
-      ruleScore += 20;
+      ruleScore += 30;
     }
 
     let mlScore = 0;
     try {
-      if (Math.random() < 0.02) throw new Error("ML Timeout");
+      if (Math.random() < 0.01) throw new Error("ML Timeout");
       mlScore = this.simulateMLInference(transaction, history);
     } catch (e) {
       isFallback = true;
@@ -93,10 +93,13 @@ export class FraudEngine {
   }
 
   private simulateMLInference(tx: Transaction, history: UserHistory): number {
-    let score = 20;
-    if (tx.merchant.toLowerCase().includes('crypto')) score += 40;
+    // Calibrated to hit the 60-85 range more often for "Manual Review" cases
+    let score = 30;
+    if (tx.merchant.toLowerCase().includes('crypto')) score += 35;
     if (['Lagos', 'Moscow', 'Dubai'].includes(tx.location.city)) score += 15;
-    return Math.min(score + (Math.random() * 30), 100);
+    if (tx.amount > 1000) score += 10;
+    
+    return Math.min(score + (Math.random() * 25), 100);
   }
 
   private createDefaultHistory(userId: string): UserHistory {
