@@ -14,6 +14,22 @@ export enum RiskFlag {
   PATTERN_MISMATCH = 'PATTERN_MISMATCH'
 }
 
+export enum LogSeverity {
+  INFO = 'INFO',
+  WARN = 'WARN',
+  ERROR = 'ERROR',
+  CRITICAL = 'CRITICAL'
+}
+
+export interface LogEntry {
+  id: string;
+  timestamp: number;
+  type: string;
+  severity: LogSeverity;
+  message: string;
+  metadata?: any;
+}
+
 export interface Strategy {
   name: string;
   version: string;

@@ -1,10 +1,11 @@
-
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 import { Transaction, RiskAnalysis } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Note: Initialization is handled within each function to ensure fresh client state and the most current API key as per best practices.
 
 export async function getFraudExplanation(tx: Transaction, analysis: RiskAnalysis): Promise<string> {
+  // Always initialize GoogleGenAI right before the API call to ensure use of the correct environment key
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const prompt = `
     Analyze this transaction and fraud engine result. Provide a concise, professional explanation for a fraud analyst.
     
@@ -24,7 +25,8 @@ export async function getFraudExplanation(tx: Transaction, analysis: RiskAnalysi
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      // Using gemini-3-pro-preview for complex text tasks like fraud investigation explanation
+      model: 'gemini-3-pro-preview',
       contents: prompt,
       config: {
         systemInstruction: "You are a senior financial crime investigator. Your goal is to explain why a transaction was flagged or approved based on technical signals like velocity, geo-location, and device fingerprinting. Be concise and use professional terminology.",
@@ -40,6 +42,8 @@ export async function getFraudExplanation(tx: Transaction, analysis: RiskAnalysi
 }
 
 export async function getSystemInsights(metrics: any): Promise<string> {
+  // Always initialize GoogleGenAI right before the API call
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const prompt = `
     System Health Report:
     - Avg Latency: ${metrics.avgLatency.toFixed(2)}ms
@@ -52,6 +56,7 @@ export async function getSystemInsights(metrics: any): Promise<string> {
 
   try {
     const response = await ai.models.generateContent({
+      // Using gemini-3-flash-preview for basic text tasks like system summarization
       model: 'gemini-3-flash-preview',
       contents: prompt,
       config: {
