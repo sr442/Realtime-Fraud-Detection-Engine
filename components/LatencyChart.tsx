@@ -24,7 +24,7 @@ const LatencyChart: React.FC<LatencyChartProps> = ({ data, selectedId, onSelect 
 
   return (
     <div className="h-full w-full min-h-[160px] relative">
-      <ResponsiveContainer width="100%" height="100%">
+      <ResponsiveContainer width="100%" height="100%" minHeight={160}>
         <AreaChart 
           data={data} 
           onClick={handleClick}
