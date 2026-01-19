@@ -70,6 +70,7 @@ export interface RiskAnalysis {
   isFallback: boolean;
   timestamp: number;
   strategyName: string;
+  ambiguitySignal?: string;
 }
 
 export interface UserHistory {

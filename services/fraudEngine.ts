@@ -2,6 +2,15 @@
 import { Transaction, RiskAnalysis, Decision, RiskFlag, UserHistory, Strategy } from '../types';
 import { SYSTEM_CONFIG } from '../constants';
 
+const AMBIGUITY_SIGNALS = [
+  "Mismatched Browser Entropy: Language headers do not match IP geolocation locale.",
+  "Proxy/VPN Leak: Traffic originating from a known residential proxy network used for bulk scraping.",
+  "Behavioral Anomaly: Transaction occurs outside of typical user wake/sleep cycle with high-value merchant.",
+  "Velocity Cluster: Device hash associated with 3+ distinct user accounts in the last 60 minutes.",
+  "Card Testing Pattern: Sequential transactions with small rounding variations at a low-verification merchant.",
+  "High-Risk Sequence: First transaction after 90 days of inactivity directed to a high-liquidity merchant."
+];
+
 export class FraudEngine {
   private userCache: Map<string, UserHistory> = new Map();
 
@@ -67,10 +76,14 @@ export class FraudEngine {
     const finalScore = isFallback ? ruleScore : (ruleScore * strategy.ruleWeight + mlScore * strategy.mlWeight);
     
     let decision = Decision.APPROVE;
+    let ambiguitySignal: string | undefined;
+
     if (finalScore >= SYSTEM_CONFIG.FRAUD_THRESHOLD_BLOCK) {
       decision = Decision.BLOCK;
     } else if (finalScore >= SYSTEM_CONFIG.FRAUD_THRESHOLD_REVIEW) {
       decision = Decision.MANUAL_REVIEW;
+      // Select a specific signal for the review queue
+      ambiguitySignal = AMBIGUITY_SIGNALS[Math.floor(Math.random() * AMBIGUITY_SIGNALS.length)];
     }
 
     this.updateUserCache(transaction, history);
@@ -88,12 +101,12 @@ export class FraudEngine {
       processingTimeMs,
       isFallback,
       timestamp: Date.now(),
-      strategyName: strategy.name
+      strategyName: strategy.name,
+      ambiguitySignal
     };
   }
 
   private simulateMLInference(tx: Transaction, history: UserHistory): number {
-    // Calibrated to hit the 60-85 range more often for "Manual Review" cases
     let score = 30;
     if (tx.merchant.toLowerCase().includes('crypto')) score += 35;
     if (['Lagos', 'Moscow', 'Dubai'].includes(tx.location.city)) score += 15;
