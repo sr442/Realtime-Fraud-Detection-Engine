@@ -79,6 +79,8 @@ export interface UserHistory {
   lastDeviceIds: string[];
   avgTransactionValue: number;
   recentTransactionCount: number;
+  estimatedNetWorth?: number;
+  liquidAssets?: number;
 }
 
 export interface SystemMetrics {
@@ -87,4 +89,34 @@ export interface SystemMetrics {
   p99Latency: number;
   fraudRate: number;
   modelDrift: number;
+}
+
+export enum AdvisoryType {
+  IDLE_CASH = 'IDLE_CASH',
+  LIFESTYLE_DRIFT = 'LIFESTYLE_DRIFT',
+  TAX_OPTIMIZATION = 'TAX_OPTIMIZATION',
+  SUBSCRIPTION_BLOAT = 'SUBSCRIPTION_BLOAT'
+}
+
+export interface AdvisorySignal {
+  type: AdvisoryType;
+  severity: 'LOW' | 'MEDIUM' | 'HIGH';
+  description: string;
+  potentialImpact: number; // Estimated $ value of optimization
+}
+
+export interface FinancialHealth {
+  yieldAtRisk: number;
+  savingsRate: number;
+  leverageRatio: number;
+  signals: AdvisorySignal[];
+}
+
+// NEW: Analytics Types
+export interface FraudAnalyticsSummary {
+  totalValueProtected: number;
+  vulnerabilityIndex: number; // 0-100
+  topAttackVectors: { type: string, count: number }[];
+  geographicHeatmap: { city: string, country: string, attempts: number }[];
+  securityPostureAdvice?: string;
 }

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Transaction, RiskAnalysis, Decision, SystemMetrics, Strategy, LogEntry, LogSeverity } from './types';
+import { Transaction, RiskAnalysis, Decision, SystemMetrics, Strategy, LogEntry, LogSeverity, FinancialHealth, AdvisoryType } from './types';
 import { FraudEngine } from './services/fraudEngine';
 import { StreamSimulator } from './services/streamSimulator';
 import { SYSTEM_CONFIG } from './constants';
@@ -12,19 +12,20 @@ import ExplainabilityView from './components/ExplainabilityView';
 import LatencyChart from './components/LatencyChart';
 import ReviewQueueOverlay from './components/ReviewQueueOverlay';
 import LogsView from './components/LogsView';
-import { Cpu, LayoutDashboard, ShieldCheck, Activity, Terminal, Waves, ActivitySquare, ScrollText, UserCheck } from 'lucide-react';
+import AdvisoryHub from './components/AdvisoryHub';
+import FraudAnalytics from './components/FraudAnalytics';
+import { Cpu, LayoutDashboard, ShieldCheck, Activity, Terminal, Waves, ActivitySquare, ScrollText, UserCheck, TrendingUp, Sparkles, BarChart3, ShieldAlert } from 'lucide-react';
 
 const engine = new FraudEngine();
 
 const STRATEGIES: Strategy[] = [
   { name: "Balanced-Ensemble-v1", version: "1.2.0", mlWeight: 0.6, ruleWeight: 0.4, description: "Standard risk balancing." },
   { name: "Strict-Geo-Fencing", version: "2.0.1", mlWeight: 0.3, ruleWeight: 0.7, description: "Aggressive impossible travel detection." },
-  { name: "High-Confidence-ML", version: "3.5.0", mlWeight: 0.85, ruleWeight: 0.15, description: "Heavy reliance on neural patterns." },
-  { name: "Retail-Aggressive", version: "1.0.4", mlWeight: 0.5, ruleWeight: 0.5, description: "Tuned for seasonal spending spikes." }
+  { name: "High-Confidence-ML", version: "3.5.0", mlWeight: 0.85, ruleWeight: 0.15, description: "Heavy reliance on neural patterns." }
 ];
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'architecture' | 'logs' | 'review'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'architecture' | 'logs' | 'review' | 'advisory' | 'analytics'>('dashboard');
   const [stream, setStream] = useState<{tx: Transaction, analysis: RiskAnalysis}[]>([]);
   const [latencyHistory, setLatencyHistory] = useState<{time: string, latency: number, id: string}[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -37,6 +38,15 @@ const App: React.FC = () => {
     p99Latency: 0,
     fraudRate: 0,
     modelDrift: 0.012
+  });
+  const [health, setHealth] = useState<FinancialHealth>({
+    yieldAtRisk: 4250,
+    savingsRate: 28,
+    leverageRatio: 1.4,
+    signals: [
+      { type: AdvisoryType.IDLE_CASH, severity: 'HIGH', description: 'Significant liquidity sitting in non-interest check account.', potentialImpact: 3200 },
+      { type: AdvisoryType.SUBSCRIPTION_BLOAT, severity: 'MEDIUM', description: 'Redundant digital service fees detected across 3 providers.', potentialImpact: 450 }
+    ]
   });
   const [selectedItem, setSelectedItem] = useState<{tx: Transaction, analysis: RiskAnalysis} | null>(null);
   
@@ -72,6 +82,10 @@ const App: React.FC = () => {
       setReviewQueue(prev => [{ tx, analysis }, ...prev]);
     } else {
       addLog(`APPROVED: ${tx.id} processed in ${analysis.processingTimeMs.toFixed(2)}ms.`, LogSeverity.INFO, 'DECISION');
+      // If approved, slightly update yield at risk to simulate real-time advisory analysis
+      if (tx.amount > 500) {
+        setHealth(prev => ({ ...prev, yieldAtRisk: prev.yieldAtRisk + (Math.random() * 10) }));
+      }
     }
 
     setStream(prev => {
@@ -103,16 +117,10 @@ const App: React.FC = () => {
 
   const handleManualAction = (id: string, action: Decision) => {
     addLog(`OVERRIDE: Analyst set ${id} to ${action}`, LogSeverity.INFO, 'HUMAN_OVERRIDE');
-    
-    // Clear from review queue
     setReviewQueue(prev => prev.filter(item => item.tx.id !== id));
-    
-    // Update master stream
     setStream(prev => prev.map(item => 
       item.tx.id === id ? { ...item, analysis: { ...item.analysis, decision: action } } : item
     ));
-
-    // Update selection to show result
     if (selectedItem?.tx.id === id) {
       setSelectedItem(prev => prev ? { ...prev, analysis: { ...prev.analysis, decision: action } } : null);
     }
@@ -125,7 +133,7 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const simulator = new StreamSimulator(handleNewTransaction);
-    simulator.start(2000); // Slower for easier tracking during demo
+    simulator.start(2500);
 
     const metricsInterval = setInterval(() => {
       const latencies = [...latencyBuffer.current].sort((a, b) => a - b);
@@ -149,7 +157,6 @@ const App: React.FC = () => {
     };
   }, [handleNewTransaction, stream.length]);
 
-  const slaBudgetUsed = Math.min((metrics.p99Latency / SYSTEM_CONFIG.LATENCY_BUDGET_MS) * 100, 100);
   const slaStatus = metrics.p99Latency > SYSTEM_CONFIG.LATENCY_BUDGET_MS ? 'CRITICAL' : metrics.p99Latency > 80 ? 'WARNING' : 'OPTIMAL';
 
   return (
@@ -160,24 +167,37 @@ const App: React.FC = () => {
           <div className="p-2 bg-indigo-600 rounded-xl shadow-lg shadow-indigo-500/30">
             <ShieldCheck className="w-6 h-6 text-white" />
           </div>
-          <h1 className="hidden lg:block text-2xl font-black tracking-tighter text-white uppercase italic">Sentinel</h1>
+          <h1 className="hidden lg:block text-2xl font-black tracking-tighter text-white uppercase italic leading-none">Sentinel</h1>
         </div>
 
         <div className="flex flex-col gap-2 flex-1">
           <button onClick={() => setActiveTab('dashboard')} className={`flex items-center gap-3 p-3.5 rounded-2xl transition-all duration-300 ${activeTab === 'dashboard' ? 'bg-indigo-600/15 text-indigo-400 border border-indigo-500/20 shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}>
             <LayoutDashboard className="w-5 h-5" />
-            <span className="hidden lg:block font-black uppercase tracking-tight text-sm">Dashboard</span>
+            <span className="hidden lg:block font-black uppercase tracking-tight text-sm">Engine Room</span>
+          </button>
+
+          <button onClick={() => setActiveTab('advisory')} className={`relative group flex items-center gap-3 p-3.5 rounded-2xl transition-all duration-300 ${activeTab === 'advisory' ? 'bg-emerald-600/15 text-emerald-400 border border-emerald-500/20 shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}>
+            <TrendingUp className="w-5 h-5 group-hover:scale-110 transition-transform" />
+            <span className="hidden lg:block font-black uppercase tracking-tight text-sm">Wealth Hub</span>
+            <Sparkles className="absolute -top-1 -right-1 w-3 h-3 text-emerald-400 animate-pulse hidden lg:block" />
+          </button>
+
+          <button onClick={() => setActiveTab('analytics')} className={`flex items-center gap-3 p-3.5 rounded-2xl transition-all duration-300 ${activeTab === 'analytics' ? 'bg-rose-600/15 text-rose-400 border border-rose-500/20 shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}>
+            <BarChart3 className="w-5 h-5" />
+            <span className="hidden lg:block font-black uppercase tracking-tight text-sm">Fraud Analytics</span>
           </button>
           
           <button onClick={() => setActiveTab('review')} className={`relative flex items-center gap-3 p-3.5 rounded-2xl transition-all duration-300 ${activeTab === 'review' ? 'bg-amber-600/15 text-amber-400 border border-amber-500/20 shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}>
             <UserCheck className="w-5 h-5" />
-            <span className="hidden lg:block font-black uppercase tracking-tight text-sm">Review Center</span>
+            <span className="hidden lg:block font-black uppercase tracking-tight text-sm">Intervention</span>
             {reviewQueue.length > 0 && (
               <span className="absolute top-2 right-2 lg:right-4 w-5 h-5 bg-amber-500 text-slate-950 text-[10px] font-black rounded-full flex items-center justify-center animate-pulse border-2 border-slate-950">
                 {reviewQueue.length}
               </span>
             )}
           </button>
+
+          <div className="my-4 border-t border-slate-800/50"></div>
 
           <button onClick={() => setActiveTab('logs')} className={`flex items-center gap-3 p-3.5 rounded-2xl transition-all duration-300 ${activeTab === 'logs' ? 'bg-indigo-600/15 text-indigo-400 border border-indigo-500/20 shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}>
             <ScrollText className="w-5 h-5" />
@@ -186,13 +206,16 @@ const App: React.FC = () => {
           
           <button onClick={() => setActiveTab('architecture')} className={`flex items-center gap-3 p-3.5 rounded-2xl transition-all duration-300 ${activeTab === 'architecture' ? 'bg-indigo-600/15 text-indigo-400 border border-indigo-500/20 shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}>
             <Cpu className="w-5 h-5" />
-            <span className="hidden lg:block font-black uppercase tracking-tight text-sm">Architecture</span>
+            <span className="hidden lg:block font-black uppercase tracking-tight text-sm">Stack Spec</span>
           </button>
         </div>
 
         <div className="mt-auto hidden lg:block p-5 rounded-2xl bg-slate-800/20 border border-slate-700/50">
-          <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-2">Active Strategy</p>
-          <p className="text-xs font-black text-indigo-400 uppercase truncate">{STRATEGIES[strategyIndex].name}</p>
+          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Alpha-Secure Layer</p>
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+            <p className="text-xs font-black text-emerald-400 uppercase italic">Advisory Live</p>
+          </div>
         </div>
       </nav>
 
@@ -251,6 +274,10 @@ const App: React.FC = () => {
                 </div>
               </div>
             </>
+          ) : activeTab === 'advisory' ? (
+            <AdvisoryHub health={health} recentTransactions={stream.slice(0, 10).map(s => s.tx)} />
+          ) : activeTab === 'analytics' ? (
+            <FraudAnalytics stream={stream} />
           ) : activeTab === 'review' ? (
             <div className="flex gap-6 h-full">
               <div className="flex-1 bg-slate-900/40 border border-slate-800 rounded-3xl flex flex-col overflow-hidden shadow-2xl">
